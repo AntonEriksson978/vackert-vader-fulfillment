@@ -1,16 +1,17 @@
 const functions = require('firebase-functions')
 const request = require("request")
+const helpers = require("./helpers")
 const { dialogflow, SimpleResponse } = require('actions-on-google')
 const app = dialogflow()
 
 app.intent("weather", (conv, params) => {
     const city = params.city
     const date = params["date-time"].toString().substr(0, 10)
-    const day = dateToDay(date)
+    const day = helpers.dateToDay(date)
     const API = Api(city, date)
 
     return ApiData(API).then((data) => {
-        
+
         let simpleResponse
         if (API.name === "now") {
             let nowSSML = `<speak><par><media begin='2s'><speak>I ${city} är det just nu ${data.temp} grader, ${data.weather} och ${data.wind}<break strength='weak'/>, enligt SMHI.</speak></media><media fadeOutDur='2s'><audio src='https://actions.google.com/sounds/v1/weather/rain_on_roof.ogg' clipEnd='12s'/></media></par></speak>`
@@ -35,20 +36,6 @@ app.intent("weather", (conv, params) => {
 
 exports.vackertVader = functions.https.onRequest(app)
 
-function dateToDay(date) {
-
-    const weekday = new Array(7);
-    weekday[0] = "Söndag";
-    weekday[1] = "Måndag";
-    weekday[2] = "Tisdag";
-    weekday[3] = "Onsdag";
-    weekday[4] = "Torsdag";
-    weekday[5] = "Fredag";
-    weekday[6] = "Lördag";
-    let d = new Date(date)
-    let day = weekday[d.getDay()]
-    return day
-}
 
 function ApiData(Api) {
 
