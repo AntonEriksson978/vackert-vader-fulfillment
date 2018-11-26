@@ -1,17 +1,29 @@
+"use strict"
+
 const functions = require('firebase-functions')
 const request = require("request")
-const helpers = require("./helpers")
+const converters = require("./converters")
 const { dialogflow, SimpleResponse } = require('actions-on-google')
 const app = dialogflow()
 
+app.intent("Default Welcome Intent", (conv) => {
+    if (conv.user.last.seen) {
+        conv.ask(`Välkommen tillbaka till Vackert Väder. Vad kan jag hjälpa dig med idag?`);
+    }
+    else {
+        conv.ask("Hej och välkommen till Vackert Väder! Här använder vi väderinfo från både SMHI och YR för att kunna ge dig en så exakt prognos som möjligt. Vill du veta hur vädret är där du är nu?")
+    }
+})
+
 app.intent("weather", (conv, params) => {
+    //Constants which are going to be used in the simpleResonses
     const city = params.city
     const date = params["date-time"].toString().substr(0, 10)
-    const day = helpers.dateToDay(date)
+    const day = converters.dateToDay(date)
     const API = Api(city, date)
 
     return ApiData(API).then((data) => {
-
+        //Compose the weather forecast for today
         let simpleResponse
         if (API.name === "now") {
             let nowSSML = `<speak><par><media begin='2s'><speak>I ${city} är det just nu ${data.temp} grader, ${data.weather} och ${data.wind}<break strength='weak'/>, enligt SMHI.</speak></media><media fadeOutDur='2s'><audio src='https://actions.google.com/sounds/v1/weather/rain_on_roof.ogg' clipEnd='12s'/></media></par></speak>`
@@ -21,7 +33,7 @@ app.intent("weather", (conv, params) => {
             simpleResponse = new SimpleResponse({ speech: nowSSML, text: nowText })
             conv.ask(simpleResponse)
         }
-
+        //Compose the weather forecase for a specific day
         else if (API.name === "ten_day") {
             let tenDaySSML = `<speak><par><media begin='2s'><speak>Det blir ${data.weather} och ${data.wind} i ${city} på ${day}, enligt SMHI. Temperatur mellan ${data.minTemp} och ${data.maxTemp} grader.</speak></media><media fadeOutDur='2s'><audio src='https://actions.google.com/sounds/v1/weather/rain_on_roof.ogg' clipEnd='12s'/></media></par></speak>`
 
@@ -34,11 +46,11 @@ app.intent("weather", (conv, params) => {
     })
 })
 
-exports.vackertVader = functions.https.onRequest(app)
-
+//Send this project to firebase-functions
+module.exports.vackertVader = functions.https.onRequest(app)
 
 function ApiData(Api) {
-
+    //Create the weather object
     var weatherData = {
         temp: null,
         weather: null,
@@ -46,7 +58,9 @@ function ApiData(Api) {
         maxTemp: null,
         minTemp: null
     }
+
     return new Promise((resolve, reject) => {
+        //Make a GET request to the API and sort it into the weather object 
         request({ url: Api.url, json: true, encoding: null }, (error, resp, body) => {
             if (!error) {
                 if (Api.name === "now") {
@@ -76,7 +90,7 @@ function ApiData(Api) {
 }
 
 
-
+//Format the API URL
 function Api(city, date) {
 
     const host = "http://apier.vackertvader.se"
@@ -110,155 +124,27 @@ function Api(city, date) {
 function getWeather(body) {
 
     if (body.smhi !== undefined) {
-        return weather = translateWeather(body.smhi.symbol).toString().toLowerCase();
+        let weather = converters.translateWeather(body.smhi.symbol).toString().toLowerCase()
+        return weather
     }
     else {
-        return weather = translateWeather(body["weather_symbol"]).toString().toLowerCase();
+        let weather = converters.translateWeather(body["weather_symbol"]).toString().toLowerCase()
+        return weather
     }
 }
 
 function getWind(body) {
 
     if (body.smhi !== undefined) {
-        return wind = translateWind(body.smhi.wind.mps).toString().toLowerCase();
+        let wind = converters.translateWind(body.smhi.wind.mps).toString().toLowerCase();
+        return wind
     }
     else {
-        return wind = translateWind(body["wind_speed"]).toString().toLowerCase()
+        let wind = converters.translateWind(body["wind_speed"]).toString().toLowerCase()
+        return wind
     }
 }
 
-function translateWind(mps) {
 
-    let wind
-    let windSpeed = parseFloat(mps)
-
-    switch (true) {
-        case windSpeed < 0.2:
-            wind = "Vindstilla"
-            break
-
-        case windSpeed < 1.5:
-            wind = "Nästan vindstilla"
-            break
-
-        case (windSpeed < 3.3):
-            wind = "Lätt vind"
-            break
-
-        case windSpeed < 7.9:
-            wind = "Lite blåsigt"
-            break
-
-        case (windSpeed < 13.8):
-            wind = "Ganska blåsigt"
-            break
-
-        case (windSpeed < 20.7):
-            wind = "Riktigt blåsigt"
-            break
-
-        case (windSpeed < 24.4):
-            wind = "Stormigt"
-            break
-
-        case (windSpeed < 28.4):
-            wind = "Storm"
-            break
-
-        case (windSpeed < 32.6):
-            wind = "Svår storm"
-            break
-
-        case (windSpeed > 32.6):
-            wind = "Orkan"
-            break
-    }
-
-    return wind
-}
-
-function translateWeather(weatherCode) {
-
-    let weather
-    switch (weatherCode.toString().substr(0, 2)) {
-        case "01":
-            weather = "Soligt"
-            break
-        case "02":
-            weather = "Soligt med moln"
-            break
-        case "03":
-            weather = "Soligt med moln"
-            break
-        case "04":
-            weather = "Molnigt"
-            break
-        case "05":
-            weather = "Regnskurar"
-            break
-        case "06":
-            weather = "Regnskurar och åska"
-            break
-        case "07":
-            weather = "Skurar av snöblandat regn"
-            break
-        case "08":
-            weather = "Snö"
-            break
-        case "09":
-            weather = "Regn"
-            break
-        case "10":
-            weather = "Kraftigt regn"
-            break
-        case "11":
-            weather = "Regn och åska"
-            break
-        case "12":
-            weather = "Snöblandat regn"
-            break
-        case "13":
-            weather = "Snö"
-            break
-        case "14":
-            weather = "Snö och åska"
-            break
-        case "15":
-            weather = "Dimma"
-            break
-        case "16":
-            weather = "Soligt"
-            break
-        case "17":
-            weather = "Soligt med moln"
-            break
-        case "18":
-            weather = "Regnskurar"
-            break
-        case "19":
-            weather = "Snö"
-            break
-        case "20":
-            weather = "Snö och åska"
-            break
-        case "21":
-            weather = "snö och åska"
-            break
-        case "22":
-            weather = "Regn och åska"
-            break
-        case "23":
-            weather = "Snö och åska"
-            break
-        case "90":
-            weather = "Åska"
-            break
-        case "91":
-            weather = "Blåsigt"
-            break
-    }
-
-    return weather
-}
 
 
