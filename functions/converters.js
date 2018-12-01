@@ -1,6 +1,47 @@
 "use strict"
 
-//Return a day string
+const maps = require("@google/maps")
+const client = maps.createClient({ key: "AIzaSyBi8el8pNAtWDRKBHE6e-J2xGpY8sD3-_I" });
+
+/**
+ * Gets the city name from results returned by Google Maps reverse geocoding
+ * from coordinates.
+ * @param {number} latitude
+ * @param {number} longitude
+ * @return {Promise<string>}
+ * */
+const coordinatesToCity = (latitude, longitude) => {
+
+    const latlng = [latitude, longitude]
+
+    return new Promise((resolve, reject) =>
+        client.reverseGeocode({ latlng }, (err, response) => {
+
+            if (err) {
+                reject(err)
+            }
+
+            const { results } = response.json
+            const components = results[0].address_components
+
+            for (const component of components) {
+                for (const type of component.types) {
+                    if (type === 'locality') {
+                        resolve(component.long_name)
+                    }
+                }
+            }
+
+            //reject(new Error('Could not parse city name from Google Maps results'))
+        })
+    )
+}
+
+/** 
+ * 
+ * @param {Date} date
+ * @returns A day string
+ * */
 function dateToDay(date) {
 
     const weekday = new Array(7);
@@ -70,90 +111,105 @@ function translateWind(mps) {
 //Return a weather description
 function translateWeather(weatherCode) {
 
-    let weather
+    let weather = {
+        description: "",
+        soundURL: ""
+    }
     switch (weatherCode.toString().substr(0, 2)) {
         case "01":
-            weather = "Soligt"
+            weather.description = "Soligt"
+            weather.soundURL = "https://actions.google.com/sounds/v1/ambiences/summer_forest.ogg"
             break
         case "02":
-            weather = "Soligt med moln"
+            weather.description = "Soligt med moln"
+            weather.soundURL = "https://actions.google.com/sounds/v1/ambiences/summer_forest.ogg"
             break
         case "03":
-            weather = "Soligt med moln"
+            weather.description = "Soligt med moln"
+            weather.soundURL = "https://actions.google.com/sounds/v1/ambiences/summer_forest.ogg"
             break
         case "04":
-            weather = "Molnigt"
+            weather.description = "Molnigt"
+            weather.soundURL = "https://actions.google.com/sounds/v1/ambiences/summer_forest.ogg"
             break
         case "05":
-            weather = "Regnskurar"
+            weather.description = "Regnskurar"
+            weather.soundURL = "https://actions.google.com/sounds/v1/weather/rain_on_roof.ogg"
             break
         case "06":
-            weather = "Regnskurar och åska"
+            weather.description = "Regnskurar och åska"
+            weather.soundURL = "https://actions.google.com/sounds/v1/weather/rain_on_car_heavy.ogg"
             break
         case "07":
-            weather = "Skurar av snöblandat regn"
+            weather.description = "Skurar av snöblandat regn"
             break
         case "08":
-            weather = "Snö"
+            weather.description = "Snö"
             break
         case "09":
-            weather = "Regn"
+            weather.description = "Regn"
             break
         case "10":
-            weather = "Kraftigt regn"
+            weather.description = "Kraftigt regn"
             break
         case "11":
-            weather = "Regn och åska"
+            weather.description = "Regn och åska"
+            weather.soundURL = "https://actions.google.com/sounds/v1/weather/rain_on_car_heavy.ogg"
             break
         case "12":
-            weather = "Snöblandat regn"
+            weather.description = "Snöblandat regn"
             break
         case "13":
-            weather = "Snö"
+            weather.description = "Snö"
             break
         case "14":
-            weather = "Snö och åska"
+            weather.description = "Snö och åska"
             break
         case "15":
-            weather = "Dimma"
+            weather.description = "Dimma"
             break
         case "16":
-            weather = "Soligt"
+            weather.description = "Soligt"
+            weather.soundURL = "https://actions.google.com/sounds/v1/ambiences/summer_forest.ogg"
             break
         case "17":
-            weather = "Soligt med moln"
+            weather.description = "Soligt med moln"
+            weather.soundURL = "https://actions.google.com/sounds/v1/ambiences/summer_forest.ogg"
             break
         case "18":
-            weather = "Regnskurar"
+            weather.description = "Regnskurar"
+            weather.soundURL = "https://actions.google.com/sounds/v1/weather/rain_on_roof.ogg"
             break
         case "19":
-            weather = "Snö"
+            weather.description = "Snö"
             break
         case "20":
-            weather = "Snö och åska"
+            weather.description = "Snö och åska"
             break
         case "21":
-            weather = "snö och åska"
+            weather.description = "snö och åska"
             break
         case "22":
-            weather = "Regn och åska"
+            weather.description = "Regn och åska"
             break
         case "23":
-            weather = "Snö och åska"
+            weather.description = "Snö och åska"
             break
         case "90":
-            weather = "Åska"
+            weather.description = "Åska"
             break
         case "91":
-            weather = "Blåsigt"
+            weather.description = "Blåsigt"
             break
     }
 
     return weather
 }
 
+
 module.exports = {
     dateToDay: dateToDay,
     translateWeather: translateWeather,
-    translateWind: translateWind
+    translateWind: translateWind,
+    coordinatesToCity: coordinatesToCity
 }
