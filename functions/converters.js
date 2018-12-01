@@ -1,7 +1,7 @@
 "use strict"
 
 const maps = require("@google/maps")
-const client = maps.createClient({ key: "AIzaSyBi8el8pNAtWDRKBHE6e-J2xGpY8sD3-_I" });
+const client = maps.createClient({ key: "" });
 
 /**
  * Gets the city name from results returned by Google Maps reverse geocoding
