@@ -1,10 +1,13 @@
+
 "use strict"
 
 const functions = require('firebase-functions')
 const request = require("request")
+const responses = require("./responses")
 const converters = require("./converters")
 const { dialogflow, SimpleResponse } = require('actions-on-google')
 const app = dialogflow()
+
 
 app.intent("Default Welcome Intent", (conv) => {
     if (conv.user.last.seen) {
@@ -18,131 +21,185 @@ app.intent("Default Welcome Intent", (conv) => {
 app.intent("weather", (conv, params) => {
     //Constants which are going to be used in the simpleResonses
     const city = params.city
-    const date = params["date-time"].toString().substr(0, 10)
-    const day = converters.dateToDay(date)
-    const API = Api(city, date)
-
-    return ApiData(API).then((data) => {
-        //Compose the weather forecast for today
-        let simpleResponse
-        if (API.name === "now") {
-            let nowSSML = `<speak><par><media begin='2s'><speak>I ${city} är det just nu ${data.temp} grader, ${data.weather} och ${data.wind}<break strength='weak'/>, enligt SMHI.</speak></media><media fadeOutDur='2s'><audio src='https://actions.google.com/sounds/v1/weather/rain_on_roof.ogg' clipEnd='12s'/></media></par></speak>`
-
-            let nowText = `I ${city} är det just nu ${data.temp} grader, ${data.weather} och ${data.wind}, enligt SMHI.`
-
-            simpleResponse = new SimpleResponse({ speech: nowSSML, text: nowText })
-            conv.ask(simpleResponse)
-        }
-        //Compose the weather forecase for a specific day
-        else if (API.name === "ten_day") {
-            let tenDaySSML = `<speak><par><media begin='2s'><speak>Det blir ${data.weather} och ${data.wind} i ${city} på ${day}, enligt SMHI. Temperatur mellan ${data.minTemp} och ${data.maxTemp} grader.</speak></media><media fadeOutDur='2s'><audio src='https://actions.google.com/sounds/v1/weather/rain_on_roof.ogg' clipEnd='12s'/></media></par></speak>`
-
-            let tenDayText = `Det blir ${data.weather} och ${data.wind} i ${city} på ${day}, enligt SMHI. Temperatur mellan ${data.minTemp} och ${data.maxTemp} grader.`
-
-            simpleResponse = new SimpleResponse({ speech: tenDaySSML, text: tenDayText })
-            conv.ask(simpleResponse)
-        }
-        return simpleResponse
+    const dateTime = converters.dateTimeObject(params["date-time"]["date_time"], 
+    {
+        start: params["date-time"].startDateTime,
+        end: params["date-time"].endDateTime
     })
+    const day = converters.dateToDay(dateTime.start)
+    const api = getApi(city, dateTime)
+    const promiseToGetApiData = apiData(api, dateTime)
+
+    //when the promise is fulfilled use the api data to compose a weather forecast and then return it
+    const weatherForecast = promiseToGetApiData
+        .then((weatherData) => composeWeatherForecast(weatherData, city, day, api))
+        .then((forecastResponse) => conv.ask(forecastResponse))
+
+    return weatherForecast
 })
 
+function composeWeatherForecast(weatherData, city, day, api) {
+
+    if (api.type === "nextTwoDays") {
+
+        if (api.name === "isNowOrToday") {
+            let weatherForecast = responses.nowForecast(city, weatherData)
+            return new SimpleResponse({ speech: weatherForecast.speech, text: weatherForecast.text })
+
+        }
+        else if (api.name === "isThisAfternoon") {
+            
+            let weatherForecast = responses.afternoonForecast(city, weatherData)
+            return new SimpleResponse({ speech: weatherForecast.speech, text: weatherForecast.text })
+        }
+        else if (api.name === "isTonight") {
+            
+            let weatherForecast = responses.eveningForecast(city, weatherData)
+            return new SimpleResponse({ speech: weatherForecast.speech, text: weatherForecast.text })
+        }
+    }
+
+    else if (api.type === "tenDay") {
+        
+        if (isYrAndSmhiEqual(weatherData.smhi, weatherData.yr)) {
+            let weatherForecast = responses.tenDayForecast(weatherData.smhi, city, day)
+            return new SimpleResponse({ speech: weatherForecast.speech, text: weatherForecast.text })
+        }
+        else {
+            let weatherForecast = responses.tenDayForecastExpanded(weatherData.smhi, weatherData.yr, city, day)
+            return new SimpleResponse({ speech: weatherForecast.speech, text: weatherForecast.text })
+        }
+
+    }
+
+}
+function isYrAndSmhiEqual(smhi, yr) {
+    const weather = smhi.weather === yr.weather
+    const wind = smhi.wind === yr.wind
+    const maxTemp = smhi.maxTemp === yr.maxTemp
+    const minTemp = smhi.minTemp === yr.minTemp
+    if (weather && wind && maxTemp && minTemp) {
+        console.log("yooyoy")
+        return true
+    }
+    else {
+        return false 
+    }
+}
 //Send this project to firebase-functions
 module.exports.vackertVader = functions.https.onRequest(app)
 
-function ApiData(Api) {
+function apiData(api, dateTime) {
     //Create the weather object
-    var weatherData = {
-        temp: null,
-        weather: null,
-        wind: null,
-        maxTemp: null,
-        minTemp: null
-    }
 
     return new Promise((resolve, reject) => {
         //Make a GET request to the API and sort it into the weather object 
-        request({ url: Api.url, json: true, encoding: null }, (error, resp, body) => {
-            if (!error) {
-                if (Api.name === "now") {
-                    weatherData = {
-                        temp: body.temperature,
-                        weather: getWeather(body),
-                        wind: getWind(body)
-                    }
-                }
-                else if (Api.name === "ten_day") {
-                    weatherData = {
-                        weather: getWeather(body),
-                        wind: getWind(body),
-                        maxTemp: body.smhi.temperature.max,
-                        minTemp: body.smhi.temperature.min
-                    }
-                }
-                resolve(weatherData)
-            }
-            else {
+        request({ url: api.url, json: true, encoding: null }, (error, resp, body) => {
+
+            if (error) {
                 weatherData = null
                 console.log(error)
                 reject(error)
+            }
+            else {
+
+                if (api.type === "nextTwoDays") {
+
+                    let forecast = getNextTwoDaysForecast(body.forecast, dateTime)
+                    let weatherData = {
+                        temp: Math.round(forecast.temperature),
+                        weather: getWeather(forecast),
+                        wind: getWind(forecast),
+                        darkTime: getDarkTime(body["sun_data"]["civil_sunset"])
+                    }
+                    resolve(weatherData)
+
+                }
+                else if (api.type === "tenDay") {
+
+                    console.log(body.location)
+                    let weatherData = {
+                        yr: {
+                            weather: getWeather(body.yr),
+                            wind: getWind(body.yr),
+                            maxTemp: Math.round(body.yr.temperature.max),
+                            minTemp: Math.round(body.yr.temperature.min),
+                            darkTime: getDarkTime(body["sun_data"]["civil_sunset"])
+                        },
+                        smhi: {
+                            weather: getWeather(body.smhi),
+                            wind: getWind(body.smhi),
+                            maxTemp: Math.round(body.smhi.temperature.max),
+                            minTemp: Math.round(body.smhi.temperature.min),
+                            darkTime: getDarkTime(body["sun_data"]["civil_sunset"])
+                        }
+                    }
+                    resolve(weatherData)
+                }
             }
         })
     })
 }
 
+function getNextTwoDaysForecast(forecast, dateTime) {
+
+    const paramsDate = new Date(dateTime.start)
+
+    for (let i = 0; i < forecast.length; i++) {
+
+        let time = new Date(forecast[i].time)
+        if (time.getHours() > paramsDate.getHours() && time.getDate() === paramsDate.getDate()) {
+            console.log(forecast[i])
+            return forecast[i]
+        }
+
+    }
+}
 
 //Format the API URL
-function Api(city, date) {
+function getApi(city, dateTime) {
 
     const host = "http://apier.vackertvader.se"
     const path = {
-        now: ":2052/talk/now?location=",
+        nextTwoDays: ":2052/talk/next_two_days?location=",
         tenDay: ":2052/talk/ten_day?location=",
         tenDayDate: "&date="
     }
-    if (date !== "" && city !== "") {
+console.log(dateTime)
+    let api = {
+        name: converters.translateDateTime(dateTime).name,
+        type: converters.translateDateTime(dateTime).type,
+        url: ""
+    }
+    if (api.type === "nextTwoDays") {
+        api.url = encodeURI(host + path.nextTwoDays + city)
+    }
+    else if (api.type === "tenDay") {
+        api.url = encodeURI(host + path.tenDay + city + path.tenDayDate + dateTime.start.toString().substr(0, 10))
+    }
 
-        let Api = {
-            url: encodeURI(host + path.tenDay + city + path.tenDayDate + date),
-            name: "ten_day"
-        }
-        return Api
-    }
-    else if (date === "" && city !== "") {
 
-        let Api = {
-            url: encodeURI(host + path.now + city),
-            name: "now"
-        }
-        return Api
-    }
-    else {
-        console.log("No conversation parameters found")
-        return null
-    }
+    console.log(api)
+    return api
 }
 
-function getWeather(body) {
+function getDarkTime (darkTime) {
 
-    if (body.smhi !== undefined) {
-        let weather = converters.translateWeather(body.smhi.symbol).toString().toLowerCase()
-        return weather
-    }
-    else {
-        let weather = converters.translateWeather(body["weather_symbol"]).toString().toLowerCase()
-        return weather
-    }
+    let dark = new Date(darkTime)
+    console.log(`${dark.getHours()}:${dark.getMinutes()}`)
+    return `${dark.getHours()}:${dark.getMinutes()}`
 }
 
-function getWind(body) {
+function getWeather(forecast) {
 
-    if (body.smhi !== undefined) {
-        let wind = converters.translateWind(body.smhi.wind.mps).toString().toLowerCase();
-        return wind
-    }
-    else {
-        let wind = converters.translateWind(body["wind_speed"]).toString().toLowerCase()
-        return wind
-    }
+    let weather = converters.translateWeather(forecast.symbol).toString().toLowerCase()
+    return weather
+}
+
+function getWind(forecast) {
+
+    let wind = converters.translateWind(forecast.wind.mps).toString().toLowerCase();
+    return wind
 }
 
 
