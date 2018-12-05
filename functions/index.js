@@ -79,7 +79,6 @@ function isYrAndSmhiEqual(smhi, yr) {
     const maxTemp = smhi.maxTemp === yr.maxTemp
     const minTemp = smhi.minTemp === yr.minTemp
     if (weather && wind && maxTemp && minTemp) {
-        console.log("yooyoy")
         return true
     }
     else {
@@ -117,7 +116,6 @@ function apiData(api, dateTime) {
                 }
                 else if (api.type === "tenDay") {
 
-                    console.log(body.location)
                     let weatherData = {
                         yr: {
                             weather: getWeather(body.yr),
@@ -149,7 +147,7 @@ function getNextTwoDaysForecast(forecast, dateTime) {
 
         let time = new Date(forecast[i].time)
         if (time.getHours() > paramsDate.getHours() && time.getDate() === paramsDate.getDate()) {
-            console.log(forecast[i])
+           
             return forecast[i]
         }
 
@@ -165,7 +163,6 @@ function getApi(city, dateTime) {
         tenDay: ":2052/talk/ten_day?location=",
         tenDayDate: "&date="
     }
-console.log(dateTime)
     let api = {
         name: converters.translateDateTime(dateTime).name,
         type: converters.translateDateTime(dateTime).type,
@@ -178,15 +175,12 @@ console.log(dateTime)
         api.url = encodeURI(host + path.tenDay + city + path.tenDayDate + dateTime.start.toString().substr(0, 10))
     }
 
-
-    console.log(api)
     return api
 }
 
 function getDarkTime (darkTime) {
 
     let dark = new Date(darkTime)
-    console.log(`${dark.getHours()}:${dark.getMinutes()}`)
     return `${dark.getHours()}:${dark.getMinutes()}`
 }
 
