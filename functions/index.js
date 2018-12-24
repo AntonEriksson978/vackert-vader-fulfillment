@@ -323,7 +323,6 @@ function getApi(city, dateTime) {
         tenDay: ":2052/talk/ten_day?location=",
         tenDayDate: "&date="
     }
-
     let api = {
         name: converters.translateDateTime(dateTime).name,
         type: converters.translateDateTime(dateTime).type,
