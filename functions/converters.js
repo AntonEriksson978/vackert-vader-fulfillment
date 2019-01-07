@@ -7,12 +7,12 @@ var googleMapsClient = require("@google/maps").createClient({
 
 function dateTimeObject(date, dateTime) {
     //if no there is no date or dateTime given, assume user asks for today
-    if (date === undefined && dateTime.start === undefined && dateTime.end === undefined) {
+    if (date === undefined && dateTime === undefined && dateTime.end === undefined) {
         return { start: new Date(), end: "" }
     }
     else {
         if (date !== undefined) {
-            return { start: date, end: "" }
+            return { start: new Date(date), end: "" }
         }
         else {
             return dateTime
@@ -80,7 +80,6 @@ function getOriginalDateTime(dateTime) {
 }
 
 function translateDateTime(dateTime) {
-
     const { isNow, isThisMorning, isThisAfternoon, isTonight, isToday, isTomorrowMorning, isTomorrowAfternoon, isTomorrowNight, isDayAfterTomorrowMorning, isDayAfterTomorrowAfternoon, isDayAfterTomorrowNight, isOtherDay } = timeOfDay(dateTime)
 
     switch (true) {
@@ -128,11 +127,11 @@ function translateDateTime(dateTime) {
 }
 
 function timeOfDay(dateTime) {
-    const dT = new Date(dateTime.start)
+    const dT = new Date(dateTime)
     const todaysDate = new Date()
-    const morningTime = 5
-    const afternoonTime = 12
-    const eveningTime = 17
+    const morningTime = 4
+    const afternoonTime = 11
+    const eveningTime = 16
     const tomorrowsDate = new Date()
     tomorrowsDate.setTime(tomorrowsDate.getTime() + (1000 * 3600 * 24))
     const dayAfterTomorrowsDate = new Date() 
@@ -145,7 +144,7 @@ function timeOfDay(dateTime) {
         && dT.getHours() < eveningTime 
     const isEvening = dT.getHours() >= eveningTime
         && todaysDate.getHours() <= eveningTime 
-    const isToday = dT.toDateString() === todaysDate.toDateString() || dateTime.start === "" 
+    const isToday = dT.toDateString() === todaysDate.toDateString() || dateTime === "" 
     const isNow = dT.getMinutes() <= todaysDate.getMinutes()
         && dT.getMinutes() + 3 > todaysDate.getMinutes()
         && isToday 

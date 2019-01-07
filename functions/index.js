@@ -11,7 +11,7 @@ const app = dialogflow({
 })
 
 app.intent("Default Welcome Intent", (conv, params) => {
-    if (conv.user.last.seen) {
+    if (conv.user.storage.city) {
         conv.ask("Välkommen tillbaka till Vackert Väder, fråga mig om vädret!")
     }
     else {
@@ -40,8 +40,8 @@ app.intent("sunset_or_sunrise", (conv, params) => {
     const dateTime = getDateTime(params)
     const day = converters.dateToDay(dateTime.start)
 
-    const api = getApi(city, dateTime)
-    const promiseToGetApiData = apiData(api, dateTime)
+    const api = getApi(city, dateTime.start)
+    const promiseToGetApiData = apiData(api, dateTime.start)
 
     //when the promise is fulfilled use the api data to compose a weather forecast and then return it
     const sunForecast = promiseToGetApiData
@@ -53,14 +53,9 @@ app.intent("sunset_or_sunrise", (conv, params) => {
 
 function composeSunForecast(weatherData, city, sun, day) {
 
-    let sunForecast
-
-    if (sun === "Solnedgång") {
-        sunForecast = responses.sunsetForecast(city, weatherData, day)
-    }
-    else {
-        sunForecast = responses.sunriseForecast(city, weatherData, day)
-    }
+    let sunForecast = (sun === "Solnedgång") 
+        ? responses.sunsetForecast(city, weatherData, day) 
+        : responses.sunriseForecast(city, weatherData, day)
 
     return new SimpleResponse({ speech: sunForecast.speech, text: sunForecast.text })
 }
@@ -71,25 +66,13 @@ function getFollowUpForecast(conv, params) {
 
     const city = params.city || conv.user.storage.city
     const dateTime = getDateTime(params)
-    const originalDateTime = converters.getOriginalDateTime(dateTime)
-    if (originalDateTime === "eftermiddag") {
+    const originalDateTime = converters.getOriginalDateTime(dateTime.start)
 
-        const api = getApi(city, dateTime)
-        const promiseToGetApiData = apiData(api, dateTime)
-
-        //when the promise is fulfilled use the api data to compose a weather forecast and then return it
-        const weatherForecast = promiseToGetApiData
-            .then((evening) => composeFollowUpForecast(city, evening))
-            .then((forecastResponse) => conv.ask(forecastResponse))
-
-        return weatherForecast
-    }
-    else {
-        let dateTimeAfternoon = dateTime
-        let dateTimeEvening = dateTime
-        dateTimeAfternoon.start.setHours(12)
-        dateTimeEvening.start.setHours(17)
-
+    if (originalDateTime === "denna morgon"){
+        let dateTimeAfternoon = new Date(dateTime.start)
+        let dateTimeEvening = new Date(dateTime.start)
+        dateTimeAfternoon.setHours(12)
+        dateTimeEvening.setHours(17)
 
         const api = getApi(city, dateTimeAfternoon)
         const promiseToGetApiData = apiFollowUpData(api, dateTimeAfternoon, dateTimeEvening)
@@ -100,24 +83,32 @@ function getFollowUpForecast(conv, params) {
             .then((forecastResponse) => conv.ask(forecastResponse))
 
         return weatherForecast
-
     }
-    
+    else if (originalDateTime === "eftermiddag") { 
+
+        const api = getApi(city, dateTim.start)
+        const promiseToGetApiData = apiData(api, dateTime.start)
+
+        //when the promise is fulfilled use the api data to compose a weather forecast and then return it
+        const weatherForecast = promiseToGetApiData
+            .then((evening) => composeFollowUpForecast(city, evening))
+            .then((forecastResponse) => conv.ask(forecastResponse))
+
+        return weatherForecast
+    }
+
+    else {
+        conv.ask("Fråga mig om vädret!")
+        return null
+    }
+
 }
 
 function composeFollowUpForecast(city, evening, afternoon) {
 
-    let weatherForecast
-
-    if (afternoon) {
-        weatherForecast = responses.restOfTheDayForecast(city, evening, afternoon)
-    }
-
-    else {
-        weatherForecast = responses.nextTwoDaysForecast(city, "kväll", evening)
-
-    }
-
+    let weatherForecast = afternoon 
+        ? responses.restOfTheDayForecast(city, afternoon, evening) 
+        : responses.nextTwoDaysForecast(city, "kväll", evening)
 
     return new SimpleResponse({ speech: weatherForecast.speech, text: weatherForecast.text })
 
@@ -130,14 +121,14 @@ function getWeatherForecast(conv, params) {
 
     const city = params.city || conv.user.storage.city
     const dateTime = getDateTime(params)
-    const originalDateTime = converters.getOriginalDateTime(dateTime)
+    const originalDateTime = converters.getOriginalDateTime(dateTime.start)
     const day = converters.dateToDay(dateTime.start)
-    const api = getApi(city, dateTime)
-    const promiseToGetApiData = apiData(api, dateTime)
+    const api = getApi(city, dateTime.start)
+    const promiseToGetApiData = apiData(api, dateTime.start)
 
     //when the promise is fulfilled use the api data to compose a weather forecast and then return it
     const weatherForecast = promiseToGetApiData
-        .then((weatherData) => composeWeatherForecast(weatherData, city, day, api, originalDateTime, dateTime))
+        .then((weatherData) => composeWeatherForecast(weatherData, city, day, api, originalDateTime, dateTime.start))
         .then((forecastResponse) => conv.ask(forecastResponse))
 
     return weatherForecast
@@ -146,21 +137,15 @@ function getWeatherForecast(conv, params) {
 function composeWeatherForecast(weatherData, city, day, api, originalDateTime, dateTime) {
 
     let weatherForecast
-
     if (api.type === "nextTwoDays") {
-        if (api.name === "isNow") {
-            weatherForecast = responses.rightNowForecast(city, originalDateTime, dateTime, weatherData)
-        }
 
-        else {
-            weatherForecast = responses.nextTwoDaysForecast(city, originalDateTime, weatherData)
-
-        }
+        weatherForecast = (api.name === "isNow") 
+        ? responses.rightNowForecast(city, originalDateTime, dateTime, weatherData) 
+        : weatherForecast = responses.nextTwoDaysForecast(city, originalDateTime, weatherData)
     }
-
     else if (api.type === "tenDay") {
-        weatherForecast = responses.tenDayForecast(city, weatherData, day)
 
+        weatherForecast = responses.tenDayForecast(city, weatherData, day)
     }
 
 
@@ -172,7 +157,7 @@ module.exports.vackertVader = functions.https.onRequest(app)
 
 function apiData(api, dateTime) {
     //Create the weather object
-
+    
     return new Promise((resolve, reject) => {
         //Make a GET request to the API and sort it into the weather object 
         request({ url: api.url, json: true, encoding: null }, (error, resp, body) => {
@@ -287,8 +272,8 @@ function apiFollowUpData(api, dateTimeAfternoon, dateTimeEvening) {
 
                     }
                 }
+                console.log(weatherData)
                 resolve(weatherData)
-
             }
         })
     })
@@ -296,7 +281,7 @@ function apiFollowUpData(api, dateTimeAfternoon, dateTimeEvening) {
 
 function getNextTwoDaysForecast(forecast, dateTime) {
 
-    const paramsDate = new Date(dateTime.start)
+    const paramsDate = new Date(dateTime)
     if (forecast) {
         for (let i = 0; i < forecast.length; i++) {
 
@@ -315,7 +300,7 @@ function getNextTwoDaysForecast(forecast, dateTime) {
 
 }
 //Format the API URL
-function getApi(city, dateTime) {
+function  getApi(city, dateTime) {
 
     const host = "http://apier.vackertvader.se"
     const path = {
@@ -323,16 +308,29 @@ function getApi(city, dateTime) {
         tenDay: ":2052/talk/ten_day?location=",
         tenDayDate: "&date="
     }
+
+    function formatDateString(date) {
+        let month = '' + (date.getMonth() + 1)
+        let day = '' + date.getDate()
+        let year = date.getFullYear()
+
+        if (month.length < 2) month = '0' + month;
+        if (day.length < 2) day = '0' + day;
+
+        return [year, month, day].join('-');
+    }
+
     let api = {
         name: converters.translateDateTime(dateTime).name,
         type: converters.translateDateTime(dateTime).type,
         url: ""
     }
+
     if (api.type === "nextTwoDays") {
         api.url = encodeURI(host + path.nextTwoDays + city)
     }
     else if (api.type === "tenDay") {
-        api.url = encodeURI(host + path.tenDay + city + path.tenDayDate + dateTime.start.toString().substr(0, 10))
+        api.url = encodeURI(host + path.tenDay + city + path.tenDayDate + formatDateString(dateTime))
     }
     return api
 }
@@ -359,6 +357,7 @@ function getSunTime(sunTime) {
 }
 
 function getWeather(forecast) {
+    
     if (forecast) {
         let weather = converters.translateWeather(forecast.symbol).weather.toString().toLowerCase()
         return weather
@@ -370,7 +369,6 @@ function getWeather(forecast) {
 }
 
 function getWeatherSound(forecast) {
-
 
     if (forecast) {
         let weatherSound = converters.translateWeather(forecast.symbol).sound

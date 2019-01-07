@@ -1,17 +1,25 @@
 
 "use strict"
 
-const rightNow = (city, weatherData) => `I ${city} är det just nu ${weatherData.smhi.temp} grader, ${weatherData.smhi.weather} och ${weatherData.smhi.wind}.`
-const later = (originalDateTime, weatherData) =>  `I ${originalDateTime} blir det ${weatherData.smhi.temp} grader, ${weatherData.smhi.weather} och ${weatherData.smhi.wind}.`
+const rightNow = (city, weatherData) => (weatherData.smhi.temp === 1 || weatherData.smhi.temp === -1) 
+    ? `I ${city} är det just nu ${weatherData.smhi.temp} grad, ${weatherData.smhi.weather} och ${weatherData.smhi.wind}.`
+    : `I ${city} är det just nu ${weatherData.smhi.temp} grader, ${weatherData.smhi.weather} och ${weatherData.smhi.wind}.`
+const later = (city, originalDateTime, weatherData) => (weatherData.smhi.temp === 1 || weatherData.smhi.temp === -1) 
+    ? `I ${originalDateTime} i ${city} blir det ${weatherData.smhi.temp} grad, ${weatherData.smhi.weather} och ${weatherData.smhi.wind}.`
+    : `I ${originalDateTime} i ${city} blir det ${weatherData.smhi.temp} grader, ${weatherData.smhi.weather} och ${weatherData.smhi.wind}.`
 const laterYR = "YR tror att det blir "
-const tenDay = (city, weatherData, day) => `Det blir ${weatherData.smhi.weather} och ${weatherData.smhi.wind} i ${city} på ${day}. Temperaturer mellan ${weatherData.smhi.minTemp} och ${weatherData.smhi.maxTemp} grader.`
+const tenDay = (city, weatherData, day) => (weatherData.smhi.maxTemp === 1 || weatherData.smhi.maxTemp === -1) 
+    ? `Det blir ${weatherData.smhi.weather} och ${weatherData.smhi.wind} i ${city} på ${day}. Temperaturer mellan ${weatherData.smhi.minTemp} och ${weatherData.smhi.maxTemp} grad.`
+    : `Det blir ${weatherData.smhi.weather} och ${weatherData.smhi.wind} i ${city} på ${day}. Temperaturer mellan ${weatherData.smhi.minTemp} och ${weatherData.smhi.maxTemp} grader.`
 const sunrise = (weatherData) => ` Solen går upp klockan ${weatherData.sunrise}.`
 const sunset = (weatherData) => ` Solen går ner klockan ${weatherData.sunset}.`
-const tempYr = (weatherData) => `${weatherData.yr.temp} grader`
+const tempYr = (weatherData) => (weatherData.yr.temp === 1 || weatherData.yr.temp === -1) 
+    ? `${weatherData.yr.temp} grad` 
+    : `${weatherData.yr.temp} grader`
 const weatherYr = (weatherData) => `${weatherData.yr.weather}`
 const windYr = (weatherData) => `${weatherData.yr.wind}`
 const minMaxTempYr = (weatherData) => `temperaturer mellan ${weatherData.yr.minTemp} och ${weatherData.yr.maxTemp}`
-//const minMaxTemp = `temperaturer mellan ${afternoon.minTemp} och ${afternoon.maxTemp} grader`
+const cityAndDay = (city, day) => ` i ${city} på ${day}`
 const restOfTheDay = " Vill du veta hur det blir resten av dagen?"
 const evening = " Vill du veta hur det blir ikväll?"
 
@@ -23,7 +31,7 @@ function smhiAndYrDifferances(weatherData) {
 
     const isWeatherDiff = weatherData.smhi.weather !== weatherData.yr.weather
     const isWindDiff = weatherData.smhi.wind !== weatherData.yr.wind
-    const isTempDiff = weatherData.smhi.temp ? weatherData.smhi.temp !== weatherData.yr.weather : false
+    const isTempDiff = weatherData.smhi.temp ? weatherData.smhi.temp !== weatherData.yr.temp : false
     const isMinMaxTempDiff = weatherData.smhi.minTemp !== weatherData.yr.minTemp || weatherData.smhi.maxTemp !== weatherData.yr.maxTemp
 
     const isWeatherWindDiff = isWeatherDiff && isWindDiff
@@ -80,9 +88,12 @@ function smhiAndYrDifferances(weatherData) {
 
 function rightNowForecast(city, originalDateTime, dateTime, weatherData) {
     let text
+    const sunriseDate = new Date(weatherData.sunriseRaw);
+    const sunsetDate = new Date(weatherData.sunsetRaw);
+    
 
     if (originalDateTime === "denna morgon") {
-        if (weatherData.sunriseRaw <= dateTime.start) { //time has passed sunrise
+        if (sunriseDate.getTime() <= dateTime.getTime()) { //time has passed sunrise
             text = rightNow(city, weatherData) + restOfTheDay
         }
         else {
@@ -91,7 +102,8 @@ function rightNowForecast(city, originalDateTime, dateTime, weatherData) {
     }
     else if (originalDateTime === "eftermiddag") {
 
-        if (weatherData.sunsetRaw <= dateTime.start || weatherData.sunsetRaw.substr(11, 13) > 16) {// time has passed sunset or sunset is in the evening
+        
+        if ((sunsetDate.getTime() <= dateTime.getTime()) || sunsetDate.getHours() >= 16) {// time has passed sunset or sunset is in the evening
             text = rightNow(city, weatherData) + evening
         }
         else {
@@ -99,7 +111,7 @@ function rightNowForecast(city, originalDateTime, dateTime, weatherData) {
         }
     }
     else if (originalDateTime === "kväll") {
-        if (weatherData.sunsetRaw <= dateTime.start) { // time has passed sunset or sunset is in the evening
+        if (sunsetDate.getTime() <= dateTime.getTime()) { // time has passed sunset or sunset is in the evening
             text = rightNow(city, weatherData)
         }
         else {
@@ -116,17 +128,17 @@ function rightNowForecast(city, originalDateTime, dateTime, weatherData) {
     }
 }
 
-function restOfTheDayForecast(city, evening, afternoon) {
-    let text = later("eftermiddag", afternoon) + smhiAndYrDifferances(afternoon) + later("kväll", evening) + smhiAndYrDifferances(evening) + sunset(weatherData)
+function restOfTheDayForecast(city, afternoon, evening) {
+    let text = later(city, "eftermiddag", afternoon) + " " + smhiAndYrDifferances(afternoon) + " " + later(city, "kväll", evening) + " " + smhiAndYrDifferances(evening) + sunset(evening)
     return {
-        speech: `<speak><par><media begin='2s'><speak>${text}</speak></media><media fadeOutDur='2s'><audio src='${weatherData.sound}' clipEnd='12s'/></media></par></speak>`,
+        speech: `<speak><par><media begin='2s'><speak>${text}</speak></media><media fadeOutDur='2s'><audio src='${afternoon.sound}' clipEnd='12s'/></media></par></speak>`,
         text: text
     }
 }
 
 
 function nextTwoDaysForecast(city, originalDateTime, weatherData) {
-    let text = later(originalDateTime, weatherData) + " " + smhiAndYrDifferances(weatherData)
+    let text = later(city, originalDateTime, weatherData) + " " + smhiAndYrDifferances(weatherData)
     return {
         speech: `<speak><par><media begin='2s'><speak>${text}</speak></media><media fadeOutDur='2s'><audio src='${weatherData.sound}' clipEnd='12s'/></media></par></speak>`,
         text: text
@@ -143,16 +155,18 @@ function tenDayForecast(city, weatherData, day) {
 }
 
 function sunriseForecast(city, weatherData, day) {
+    let text = sunrise(weatherData).replace(".", "") + cityAndDay(city, day) 
     return {
-        speech: `Solen går upp klockan ${weatherData.sunrise} i ${city} på ${day}.`
-
+        speech: text,
+        text: text
     }
-}
+} 
 
 function sunsetForecast(city, weatherData, day) {
+    let text = sunset(weatherData).replace(".", "")  + cityAndDay(city, day) 
     return {
-        speech: `Solen går ner klockan ${weatherData.sunset} i ${city} på ${day}.`
-
+        speech: text,
+        text: text
     }
 }
 
